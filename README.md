@@ -6,6 +6,7 @@ A mobile-friendly score keeper for Spades. You play the cards, it keeps the scor
 
 - 2–20 players, bids and tricks entered with big tap-friendly steppers
 - Live leaderboard, per-hand history, configurable scoring and target score
+- Separate saved sessions for each scorekeeper — pick yours from the home screen
 - Everything is saved in your browser (localStorage), so no account or server is needed
 
 It's a single `index.html` file with no dependencies.
