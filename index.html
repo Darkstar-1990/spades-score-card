@@ -301,7 +301,7 @@ const DEF={settings:{ppb:30,extra:15,zero1:15,target:500,startCards:1,cardStep:1
   players:[],
   hands:[],draft:{},nextId:6,phase:"start",setup:{count:4,names:[]},started:false,tab:"play",step:"bid",winShown:false};
 let S;
-function load(){try{const raw=localStorage.getItem(KEY);if(raw){S=Object.assign(JSON.parse(JSON.stringify(DEF)),JSON.parse(raw));S.settings=Object.assign({},DEF.settings,S.settings);S.phase="start";return}}catch(e){}S=JSON.parse(JSON.stringify(DEF))}
+function load(){try{const raw=localStorage.getItem(KEY);if(raw){S=Object.assign(JSON.parse(JSON.stringify(DEF)),JSON.parse(raw));S.settings=Object.assign({},DEF.settings,S.settings);if(S.started&&S.players.length&&S.phase==="start")S.phase="game";return}}catch(e){}S=JSON.parse(JSON.stringify(DEF))}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 load();
 
@@ -462,7 +462,7 @@ function renderHistory(){let h='<div class="card"><h2>Scores by hand</h2><p clas
     S.hands.forEach((hd,i)=>{h+='<tr><td class="h">'+(i+1)+(hd.cards?'<small>'+hd.cards+' 🂠</small>':'')+'</td>'+S.players.map(p=>{const e=hd.e[p.id];if(!e)return"<td>–</td>";const v=pts(e.b,e.t);
       return'<td><b class="'+(v<0?"neg":"")+'">'+v+'</b><small>'+e.b+' / '+e.t+'</small></td>'}).join("")+'<td><button class="x" data-del="'+i+'" aria-label="delete hand">✕</button></td></tr>'});
     h+='</tbody><tfoot><tr><td>Σ</td>'+S.players.map(p=>'<td class="'+(t[p.id]<0?"neg":"")+'">'+t[p.id]+'</td>').join("")+'<td></td></tr></tfoot></table></div>'}
-  h+='</div><div class="card"><button class="btn light" id="copyScores">Copy scores to share</button><div style="height:10px"></div><button class="btn danger" id="newGame">New game</button></div>';
+  h+='</div><div class="card"><button class="btn light" id="copyScores">Copy scores to share</button><div style="height:10px"></div><button class="btn danger" id="newGame">New game</button><div style="height:10px"></div><button class="btn danger" id="endGame">End game &amp; clear scores</button></div>';
   $("tab-history").innerHTML=h}
 
 /* ================= settings ================= */
@@ -501,6 +501,7 @@ function showPhase(){const game=S.phase==="game";
   if(!game)renderSetup();renderTop();renderActions();renderSide();window.scrollTo(0,0)}
 function renderAll(){renderTop();if(S.phase==="game"){renderPlay();renderBoard();renderHistory();renderSettings()}showPhase()}
 function newGameFlow(){S.hands=[];S.draft={};S.draftCards=null;S.step="bid";S.winShown=false;S.setup.count=S.setup.count||4;S.setup.names=[];S.phase="count";save();renderAll()}
+function endGame(){S.players=[];S.hands=[];S.draft={};S.draftCards=null;S.step="bid";S.winShown=false;S.started=false;S.tab="play";S.setup.names=[];S.phase="start";save();renderAll();toast("Game ended")}
 function refreshScores(){renderTop();renderBoard();renderHistory();renderSide();if(S.tab==="play")renderPlay()}
 
 /* ================= events ================= */
@@ -526,6 +527,7 @@ document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)r
     if(s!==need)confirmBox("Tricks don't add up","Counted "+s+" of "+need+" tricks. Save anyway?","Save anyway",saveHand);else saveHand();return}
   if(b.dataset.del!=null){const i=+b.dataset.del,removed=S.hands[i];
     S.hands.splice(i,1);save();refreshScores();toast("Hand "+(i+1)+" deleted",()=>{S.hands.splice(i,0,removed);save();refreshScores()});return}
+  if(b.id==="endGame"){confirmBox("End this game?","All scores and players will be cleared from this browser. This can't be undone.","End game",endGame);return}
   if(b.id==="newGame"){confirmBox("Start a new game?","All "+S.hands.length+" hands will be cleared and you'll pick players again.","Start new",newGameFlow);return}
   if(b.id==="copyScores"){const r=ranking();const txt="♠ Spades Score Card — after "+S.hands.length+" hands\n"+r.map(x=>x.rank+". "+x.name+": "+x.total).join("\n");
     if(navigator.clipboard)navigator.clipboard.writeText(txt).then(()=>toast("Scores copied — paste them anywhere"),()=>toast("Couldn't copy"));else toast("Couldn't copy");return}
@@ -535,7 +537,7 @@ document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)r
   if(b.id==="resetSet"){const old={...S.settings};S.settings={...DEF.settings};save();renderAll();toast("Default scoring restored",()=>{S.settings=old;save();renderAll()});return}
 });
 document.addEventListener("input",e=>{const t=e.target;
-  if(t.dataset.sname!=null){S.setup.names[+t.dataset.sname]=t.value;const a=t.parentNode.querySelector(".av");if(a)a.innerHTML=avTxt(t.value||"?");return}
+  if(t.dataset.sname!=null){S.setup.names[+t.dataset.sname]=t.value;save();const a=t.parentNode.querySelector(".av");if(a)a.innerHTML=avTxt(t.value||"?");return}
   if(t.id==="cardsInp"){const n=parseInt(t.value,10);if(!isNaN(n)&&n>=1){S.draftCards=Math.min(52,n);save();$("pill").innerHTML=pillHTML();const sm=t.closest(".pill").querySelector("small");if(sm)sm.innerHTML=n+" × "+S.players.length+" players = <b>"+(n*S.players.length)+"</b>"}return}
   if(t.dataset.p){setDraft(t.dataset.p,S.step==="bid"?"b":"t",t.value.trim());liveUpdate(t.dataset.p);return}
   if(t.dataset.name){const p=S.players.find(x=>x.id===t.dataset.name);p.name=t.value;save();renderTop();renderBoard();renderHistory();renderSide();return}
@@ -543,6 +545,8 @@ document.addEventListener("input",e=>{const t=e.target;
 });
 document.addEventListener("keydown",e=>{if(e.target.id==="newName"&&e.key==="Enter")$("addP").click()});
 document.addEventListener("focusin",e=>{if(e.target.matches(".stepper input,.num"))e.target.select&&e.target.select()});
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+window.addEventListener("pagehide",save);document.addEventListener("visibilitychange",()=>{if(document.hidden)save()});
 renderAll();
 </script>
 </body>
